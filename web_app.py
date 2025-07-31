@@ -61,18 +61,6 @@ if kite is None:
     hvd = "2.43M"
     hr = 5.2
     candles_data = []
-else:
-    # Even if API is available, ensure we have fallback data
-    if cv == 0:
-        cv = 243000
-    if ltp == 0:
-        ltp = 60.3
-    if not candles_data:
-        # Generate initial dummy candle data
-        now = get_ist_time()
-        end_time = now - timedelta(minutes=1)
-        start_time = end_time - timedelta(minutes=candles)
-        past_candles(start_time, end_time)
 
 def get_last_trading_session_end():
     """Get the end time of the last trading session (3:30 PM IST)"""
@@ -584,10 +572,16 @@ else:
     print("Production deployment detected - initializing data...")
     is_market_hours = is_market_open()
     
+    # Ensure we have fallback data even if API fails
+    if cv == 0:
+        cv = 243000
+    if ltp == 0:
+        ltp = 60.3
+    
     if is_market_hours:
         # Market is open - initialize with current time data
         get_initial_quote()
-        curr_time = datetime.now()
+        curr_time = get_ist_time()
         end_time = curr_time - timedelta(minutes=1)
         start_time = end_time - timedelta(minutes=candles)
         print(f"Production: Initializing with live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
