@@ -6,7 +6,6 @@ import time
 import threading
 import os
 from quote import get_quote
-import pytz
 
 app = Flask(__name__)
 
@@ -60,8 +59,7 @@ if kite is None:
 def get_last_trading_session_end():
     """Get the end time of the last trading session (3:30 PM IST)"""
     # Get current time in IST
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
+    now = get_ist_time()
     
     # If current time is before 9:15 AM IST, get yesterday's session
     if now.hour < 9 or (now.hour == 9 and now.minute < 15):
@@ -72,11 +70,16 @@ def get_last_trading_session_end():
         # Get today's 3:30 PM IST
         return now.replace(hour=15, minute=30, second=0, microsecond=0)
 
+def get_ist_time():
+    """Get current time in IST (UTC + 5:30)"""
+    utc_now = datetime.utcnow()
+    ist_time = utc_now + timedelta(hours=5, minutes=30)
+    return ist_time
+
 def is_market_open():
     """Check if market is currently open (9:15 AM to 3:30 PM IST, Monday to Friday)"""
     # Get current time in IST
-    ist = pytz.timezone('Asia/Kolkata')
-    now = datetime.now(ist)
+    now = get_ist_time()
     
     # Check if it's a weekday (Monday = 0, Sunday = 6)
     if now.weekday() >= 5:  # Saturday or Sunday
@@ -233,8 +236,7 @@ def update_data():
     while True:
         try:
             # Get current time in IST
-            ist = pytz.timezone('Asia/Kolkata')
-            now = datetime.now(ist)
+            now = get_ist_time()
             current_time = now.strftime("%H:%M:%S")
             
             # Check if market is open
@@ -309,8 +311,7 @@ def index():
 @app.route('/test')
 def test():
     # Get current time in IST
-    ist = pytz.timezone('Asia/Kolkata')
-    ist_time = datetime.now(ist).strftime("%H:%M:%S")
+    ist_time = get_ist_time().strftime("%H:%M:%S")
     
     return jsonify({
         'status': 'success',
