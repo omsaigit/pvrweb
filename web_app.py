@@ -42,8 +42,19 @@ if enctoken:
         print("KiteApp initialized successfully")
     except Exception as e:
         print(f"Error initializing KiteApp: {e}")
+        kite = None
 else:
-    print("Warning: No enctoken available. API calls will fail.")
+    print("Warning: No enctoken available. Using dummy data mode.")
+
+# Initialize with dummy data if no API available
+if kite is None:
+    print("Running in dummy data mode")
+    # Set some initial dummy values
+    cv = 243000
+    ltp = 60.3
+    hvd = "2.43M"
+    hr = 5.2
+    candles_data = []
 
 def get_last_trading_session_end():
     """Get the end time of the last trading session (3:30 PM)"""
@@ -316,6 +327,18 @@ def get_data():
 @app.route('/api/realtime_data')
 def get_realtime_data():
     """API endpoint for real-time data that updates every second"""
+    global cv, ltp, current_time
+    
+    # Ensure we have some data even if API fails
+    if cv == 0 and kite is None:
+        cv = 243000
+    if ltp == 0 and kite is None:
+        ltp = 60.3
+    
+    # Always ensure current_time is set
+    if not current_time:
+        current_time = datetime.now().strftime("%H:%M:%S")
+    
     return jsonify({
         'cv': cv,
         'cv_formatted': format_volume(cv),
@@ -328,6 +351,16 @@ def get_realtime_data():
 @app.route('/api/table_data')
 def get_table_data():
     """API endpoint for table data that updates only at 0th second"""
+    global candles_data, hvd, hr, hv
+    
+    # Ensure we have some data even if API fails
+    if not candles_data and kite is None:
+        # Generate dummy candle data if none exists
+        now = datetime.now()
+        end_time = now - timedelta(minutes=1)
+        start_time = end_time - timedelta(minutes=candles)
+        past_candles(start_time, end_time)
+    
     return jsonify({
         'candles_data': candles_data,
         'hvd': hvd,
