@@ -305,8 +305,49 @@ def test():
         'status': 'success',
         'message': 'App is working!',
         'kite_available': kite is not None,
-        'current_time': datetime.now().strftime("%H:%M:%S")
+        'current_time': datetime.now().strftime("%H:%M:%S"),
+        'cv': cv,
+        'ltp': ltp,
+        'hvd': hvd,
+        'hr': hr,
+        'candles_count': len(candles_data) if candles_data else 0
     })
+
+@app.route('/init')
+def init_data():
+    """Manually trigger data initialization"""
+    global is_market_hours, cv, ltp, candles_data, hvd, hr
+    
+    try:
+        is_market_hours = is_market_open()
+        
+        if is_market_hours:
+            get_initial_quote()
+            curr_time = datetime.now()
+            end_time = curr_time - timedelta(minutes=1)
+            start_time = end_time - timedelta(minutes=candles)
+            past_candles(start_time, end_time)
+        else:
+            session_end = get_last_trading_session_end()
+            start_time = session_end - timedelta(minutes=candles)
+            end_time = session_end
+            past_candles(start_time, end_time)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Data initialized successfully',
+            'cv': cv,
+            'ltp': ltp,
+            'hvd': hvd,
+            'hr': hr,
+            'candles_count': len(candles_data) if candles_data else 0,
+            'is_market_hours': is_market_hours
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
 
 @app.route('/api/data')
 def get_data():
@@ -513,4 +554,28 @@ if __name__ == '__main__':
     update_thread = threading.Thread(target=update_data, daemon=True)
     update_thread.start()
     
-    app.run(debug=True, host='0.0.0.0', port=5001) 
+    app.run(debug=True, host='0.0.0.0', port=5001)
+else:
+    # For production deployment (like Render), initialize data immediately
+    print("Production deployment detected - initializing data...")
+    is_market_hours = is_market_open()
+    
+    if is_market_hours:
+        # Market is open - initialize with current time data
+        get_initial_quote()
+        curr_time = datetime.now()
+        end_time = curr_time - timedelta(minutes=1)
+        start_time = end_time - timedelta(minutes=candles)
+        print(f"Production: Initializing with live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
+    else:
+        # Market is closed - initialize with last 25 minutes of previous session
+        session_end = get_last_trading_session_end()
+        start_time = session_end - timedelta(minutes=candles)
+        end_time = session_end
+        print(f"Production: Initializing with historical data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
+    
+    past_candles(start_time, end_time)
+    
+    # Start background thread for data updates
+    update_thread = threading.Thread(target=update_data, daemon=True)
+    update_thread.start() 
