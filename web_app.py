@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 import time
 import threading
+import os
 from quote import get_quote
 
 app = Flask(__name__)
@@ -24,11 +25,25 @@ candles = 25
 instrument_token = 14283010
 ts = 'NFO:NIFTY25JUL24800CE'
 
-# Load configuration
-with open('config.json') as f:
-    data = json.load(f)
-enctoken = data["AK1099"]
-kite = KiteApp(enctoken=enctoken)
+# Load configuration with environment variable fallback
+try:
+    with open('config.json') as f:
+        data = json.load(f)
+    enctoken = data.get("AK1099", os.getenv('KITE_ENCTOKEN'))
+except Exception as e:
+    print(f"Error loading config.json: {e}")
+    enctoken = os.getenv('KITE_ENCTOKEN')
+
+# Initialize KiteApp only if enctoken is available
+kite = None
+if enctoken:
+    try:
+        kite = KiteApp(enctoken=enctoken)
+        print("KiteApp initialized successfully")
+    except Exception as e:
+        print(f"Error initializing KiteApp: {e}")
+else:
+    print("Warning: No enctoken available. API calls will fail.")
 
 def get_last_trading_session_end():
     """Get the end time of the last trading session (3:30 PM)"""
@@ -73,25 +88,35 @@ def get_instrument_token_from_ts(trading_symbol):
 def get_initial_quote():
     global minus_volume, ltp
     try:
+        if kite is None:
+            print("KiteApp not initialized, using dummy data")
+            minus_volume = 1000000
+            ltp = 50.0
+            return
+            
         q = get_quote(ts)
         minus_volume = q[ts]['volume']
         ltp = q[ts]['last_price']
         print(f"Initial Volume: {minus_volume}, Initial LTP: {ltp}")
     except Exception as e:
         print(f"Error getting initial quote: {e}")
-        minus_volume = 0
-        ltp = 0
+        minus_volume = 1000000  # Default values for demo
+        ltp = 50.0
 
 def get_current_ltp():
     """Get current LTP from quote API"""
     global ltp
     try:
+        if kite is None:
+            # Return dummy data for demo
+            return ltp if ltp > 0 else 50.0
+            
         q = get_quote(ts)
         ltp = q[ts]['last_price']
         return ltp
     except Exception as e:
         print(f"Error getting current LTP: {e}")
-        return ltp  # Return existing LTP if API fails
+        return ltp if ltp > 0 else 50.0  # Return existing LTP or default
 
 def format_volume(volume):
     """Format volume in K and M format"""
@@ -105,6 +130,49 @@ def format_volume(volume):
 def past_candles(start_time, end_time):
     global candles_data, hvd, hr, hv
     try:
+        if kite is None:
+            print("KiteApp not initialized, generating dummy candle data")
+            # Generate dummy candle data for demo
+            candles_data = []
+            base_price = 50.0
+            base_volume = 1000000
+            
+            for i in range(candles):
+                candle_time = start_time + timedelta(minutes=i)
+                open_price = base_price + (i * 0.5) + (i % 3 - 1) * 2
+                high_price = open_price + 3 + (i % 5)
+                low_price = open_price - 2 - (i % 3)
+                close_price = open_price + (i % 2 - 0.5) * 2
+                volume = base_volume + (i * 50000) + (i % 7) * 100000
+                
+                candle = {
+                    'date': candle_time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'open': round(open_price, 2),
+                    'high': round(high_price, 2),
+                    'low': round(low_price, 2),
+                    'close': round(close_price, 2),
+                    'volume': volume,
+                    'range': round(high_price - low_price, 2),
+                    'volume_formatted': format_volume(volume)
+                }
+                candles_data.append(candle)
+            
+            # Calculate HVD and HR
+            if candles_data:
+                hv_candle = max(candles_data, key=lambda x: x['volume'])
+                hv = hv_candle['volume']
+                hvd = format_volume(hv)
+
+                hr_candle = max(candles_data, key=lambda x: x['range'])
+                hr = round(hr_candle['range'], 2)
+                
+                # Set LTP from the last candle
+                global ltp
+                ltp = candles_data[-1]['close']
+                
+                print(f"Generated dummy candles - HVD: {hvd}, HR: {hr}, LTP: {ltp}")
+            return
+            
         print(f"Fetching candles for instrument_token: {instrument_token}")
         print(f"Time range: {start_time.strftime('%Y-%m-%d %H:%M:%S')} to {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
         
@@ -173,10 +241,16 @@ def update_data():
                 
                 # Update real-time data every second
                 try:
-                    q = get_quote(ts)
-                    cv = q[ts]['volume'] - minus_volume
-                    ltp = q[ts]['last_price']
-                    volume_condition = cv >= hv
+                    if kite is None:
+                        # Use dummy data for demo
+                        cv = 243000 + (now.second * 1000)  # Simulate changing volume
+                        ltp = 60.3 + (now.second % 10) * 0.1  # Simulate changing price
+                        volume_condition = cv >= hv
+                    else:
+                        q = get_quote(ts)
+                        cv = q[ts]['volume'] - minus_volume
+                        ltp = q[ts]['last_price']
+                        volume_condition = cv >= hv
                     print(f"Real-time update - CV: {cv}, LTP: {ltp}")
                 except Exception as e:
                     print(f"Error updating real-time data: {e}")
