@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVR Trading Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .instrument-info {
+            margin-top: 15px;
+        }
+
+        .instrument-symbol {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .config-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .config-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .config-section {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 999;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            max-width: 350px;
+            min-width: 300px;
+        }
+
+        .config-section.show {
+            transform: translateX(0);
+        }
+
+        .config-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-config {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-config:hover {
+            color: #333;
+        }
+
+        .config-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .config-button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .config-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .config-button:active {
+            transform: translateY(0);
+        }
+
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-card h3 {
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .status-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        /* Mobile/Desktop label visibility */
+        .mobile-label {
+            display: none;
+        }
+
+        .desktop-label {
+            display: block;
+        }
+
+        .market-status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            z-index: 1000;
+            border: none;
+            box-shadow: none;
+            background: #e74c3c; /* Default to red (closed) */
+            padding: 0;
+            transition: background 0.3s;
+        }
+
+        .market-open {
+            animation: blink 2s infinite;
+        }
+
+        .market-closed {
+            /* background: #e74c3c !important; */
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        .volume-condition {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24) !important;
+            color: white !important;
+            animation: pulse 2s infinite;
+        }
+
+        .volume-condition .value {
+            color: white !important;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .candles-table {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-top: 10px;
+        }
+
+        .candles-table h2 {
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.4rem;
+        }
+
+
+
+
+
+        .table-header {
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .table-header:hover {
+            background-color: #e9ecef;
+        }
+
+        .table-header.sort-asc::after {
+            content: " ▲";
+            color: #007bff;
+        }
+
+        .table-header.sort-desc::after {
+            content: " ▼";
+            color: #007bff;
+        }
+
+        .table-container {
+            height: calc(100vh - 350px);
+            min-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+            position: relative;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .positive { color: #27ae60; }
+        .negative { color: #e74c3c; }
+        .max-volume { background-color: #fff3cd; font-weight: bold; border: 2px solid #ffc107; }
+        .max-range { background-color: #d1ecf1; font-weight: bold; border: 2px solid #17a2b8; }
+        .positive-candle { background-color: rgba(39, 174, 96, 0.1); }
+        .negative-candle { background-color: rgba(231, 76, 60, 0.1); }
+
+        .last-updated {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .status-bar {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+            }
+            
+            .status-card {
+                padding: 8px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+            }
+            
+            .mobile-label {
+                display: block;
+            }
+            
+            .desktop-label {
+                display: none;
+            }
+            
+            .status-card h3 {
+                margin-bottom: 4px;
+                font-size: 0.7rem;
+                line-height: 1;
+            }
+            
+            .status-card .value {
+                font-size: 0.9rem;
+                font-weight: bold;
+                line-height: 1;
+            }
+            
+
+            
+            .config-section {
+                right: 10px;
+                left: 10px;
+                max-width: none;
+                min-width: auto;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .candles-table {
+                padding: 10px;
+            }
+            
+            .table-container {
+                height: calc(100vh - 280px);
+                min-height: 250px;
+            }
+            
+            th, td {
+                padding: 8px;
+                font-size: 0.9rem;
+            }
+
+
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📈 PVR </h2>
+            <p>Real-time market data monitoring</p>
+           
+        </div>
+
+        <div class="market-status" id="market-status"></div>
+
+        <button class="config-toggle" id="config-toggle" title="Configuration Settings">⚙️</button>
+        
+        <div class="config-section" id="config-section">
+            <h2>
+                ⚙️ Configuration
+                <button class="close-config" id="close-config" title="Close">×</button>
+            </h2>
+            <form class="config-form" id="config-form">
+                <div class="form-group">
+                    <label for="candles">Number of Candles:</label>
+                    <input type="number" id="candles" name="candles" value="25" min="1" max="100" required>
+                </div>
+                <div class="form-group">
+                    <label for="ts">Trading Symbol:</label>
+                    <input type="text" id="ts" name="ts" value="NFO:NIFTY25JUL24800CE" required>
+                </div>
+                <div class="form-group">
+                    <label for="instrument_token_display">Instrument Token (Auto-detected):</label>
+                    <input type="text" id="instrument_token_display" value="14283010" readonly style="background-color: #f5f5f5;">
+                </div>
+                <button type="submit" class="config-button">Update Configuration</button>
+            </form>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-card" id="hvd-card">
+                <h3 class="desktop-label">Highest Volume (HVD)</h3>
+                <h3 class="mobile-label">HV</h3>
+                <div class="value" id="hvd-value">-</div>
+            </div>
+            
+            <div class="status-card" id="hr-card">
+                <h3 class="desktop-label">Highest Range (HR)</h3>
+                <h3 class="mobile-label">HR</h3>
+                <div class="value" id="hr-value">-</div>
+            </div>
+            
+            <div class="status-card" id="cv-card">
+                <h3 class="desktop-label">Current Volume (CV)</h3>
+                <h3 class="mobile-label">CV</h3>
+                <div class="value" id="cv-value">-</div>
+            </div>
+            
+            <div class="status-card" id="ltp-card">
+                <h3 class="desktop-label">Last Traded Price (LTP)</h3>
+                <h3 class="mobile-label">LTP</h3>
+                <div class="value" id="ltp-value">-</div>
+            </div>
+            
+        </div>
+
+        <div class="candles-table">
+            
+            <h2>
+                <span id="instrument-symbol">-</span>
+            </h2>
+            
+            <div class="table-container">
+                <table id="candles-table">
+                    <thead>
+                                            <tr>
+                        <th>S.No</th>
+                        <th class="table-header" data-sort="time">Time</th>
+                        <th class="table-header" data-sort="open">Open</th>
+                        <th class="table-header" data-sort="high">High</th>
+                        <th class="table-header" data-sort="low">Low</th>
+                        <th class="table-header" data-sort="close">Close</th>
+                        <th class="table-header" data-sort="volume">Volume</th>
+                        <th class="table-header" data-sort="range">Range</th>
+                    </tr>
+                    </thead>
+                    <tbody id="candles-tbody">
+                        <tr>
+                            <td colspan="8" style="text-align: center;">Loading data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="last-updated">
+            Last updated: <span id="last-updated">-</span>
+        </div>
+    </div>
+
+    <script>
+        // Configuration state
+        let currentConfig = {
+            candles: 25,
+            instrument_token: 14283010,
+            ts: 'NFO:NIFTY25JUL24800CE'
+        };
+
+        // Table data state
+        let currentCandlesData = [];
+        let currentSort = { column: 'time', direction: 'asc' };
+
+        // Configuration panel toggle
+        document.getElementById('config-toggle').addEventListener('click', function() {
+            document.getElementById('config-section').classList.add('show');
+        });
+
+        document.getElementById('close-config').addEventListener('click', function() {
+            document.getElementById('config-section').classList.remove('show');
+        });
+
+        // Close config panel when clicking outside
+        document.addEventListener('click', function(e) {
+            const configSection = document.getElementById('config-section');
+            const configToggle = document.getElementById('config-toggle');
+            
+            if (!configSection.contains(e.target) && !configToggle.contains(e.target)) {
+                configSection.classList.remove('show');
+            }
+        });
+
+        // Auto-fetch instrument token when trading symbol changes
+        document.getElementById('ts').addEventListener('blur', function() {
+            const tradingSymbol = this.value.trim();
+            if (tradingSymbol) {
+                fetchInstrumentToken(tradingSymbol);
+            }
+        });
+
+        function fetchInstrumentToken(tradingSymbol) {
+            fetch(`/api/get_instrument_token/${encodeURIComponent(tradingSymbol)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('instrument_token_display').value = data.instrument_token;
+                        currentConfig.instrument_token = data.instrument_token;
+                    } else {
+                        document.getElementById('instrument_token_display').value = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching instrument token:', error);
+                    document.getElementById('instrument_token_display').value = 'Error fetching token';
+                });
+        }
+
+        // Handle configuration form submission
+        document.getElementById('config-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const newConfig = {
+                candles: parseInt(formData.get('candles')),
+                ts: formData.get('ts')
+            };
+            
+            // Update configuration
+            updateConfiguration(newConfig);
+        });
+
+        function updateConfiguration(config) {
+            fetch('/api/update_config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentConfig = config;
+                    currentConfig.instrument_token = data.instrument_token;
+                    document.getElementById('candles-display').textContent = config.candles;
+                    document.getElementById('instrument_token_display').value = data.instrument_token;
+                    alert(data.message || 'Configuration updated successfully!');
+                } else {
+                    alert('Error updating configuration: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating configuration:', error);
+                alert('Error updating configuration');
+            });
+        }
+
+        function updateRealtimeData() {
+            fetch('/api/realtime_data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update status cards (real-time data)
+                    document.getElementById('cv-value').textContent = data.cv_formatted;
+                    document.getElementById('ltp-value').textContent = data.ltp.toFixed(2);
+                    
+                    // Update volume condition styling
+                    const cvCard = document.getElementById('cv-card');
+                    if (data.volume_condition) {
+                        cvCard.classList.add('volume-condition');
+                    } else {
+                        cvCard.classList.remove('volume-condition');
+                    }
+                    
+                    // Update market status
+                    const marketStatus = document.getElementById('market-status');
+                    
+                    if (data.is_market_hours) {
+                        marketStatus.className = 'market-status market-open';
+                    } else {
+                        marketStatus.className = 'market-status market-closed';
+                    }
+                    
+                    // Update last updated time
+                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                })
+                .catch(error => {
+                    console.error('Error fetching real-time data:', error);
+                });
+        }
+
+        function updateTableData() {
+            fetch('/api/table_data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update status cards (table data)
+                    document.getElementById('hvd-value').textContent = data.hvd;
+                    document.getElementById('hr-value').textContent = data.hr;
+                    
+                    // Update instrument symbol
+                    document.getElementById('instrument-symbol').textContent = data.instrument_symbol;
+                    
+                    // Update candles table
+                    currentCandlesData = data.candles_data || [];
+                    renderTable();
+                })
+                .catch(error => {
+                    console.error('Error fetching table data:', error);
+                });
+        }
+
+        function updateData() {
+            // Check if it's the 0th second (start of a minute)
+            const now = new Date();
+            if (now.getSeconds() === 0) {
+                // Update table data at 0th second
+                updateTableData();
+            }
+            
+            // Always update real-time data
+            updateRealtimeData();
+        }
+
+        // Table header click listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.table-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const column = this.getAttribute('data-sort');
+                    toggleSort(column);
+                });
+            });
+        });
+
+        function toggleSort(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+            
+            // Update header states
+            document.querySelectorAll('.table-header').forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Highlight active sort
+            const activeHeader = document.querySelector(`[data-sort="${column}"]`);
+            if (activeHeader) {
+                activeHeader.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+            
+            renderTable();
+        }
+
+        function sortData(data) {
+            return data.sort((a, b) => {
+                let aVal, bVal;
+                
+                switch (currentSort.column) {
+                    case 'time':
+                        aVal = new Date(a.date);
+                        bVal = new Date(b.date);
+                        break;
+                    case 'volume':
+                        aVal = a.volume || 0;
+                        bVal = b.volume || 0;
+                        break;
+                    case 'range':
+                        aVal = a.range || 0;
+                        bVal = b.range || 0;
+                        break;
+                    case 'open':
+                    case 'high':
+                    case 'low':
+                    case 'close':
+                        aVal = a[currentSort.column] || 0;
+                        bVal = b[currentSort.column] || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+                
+                if (currentSort.direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+        }
+
+        function renderTable() {
+            if (!currentCandlesData || currentCandlesData.length === 0) return;
+            
+            const sortedData = sortData([...currentCandlesData]);
+            const tbody = document.getElementById('candles-tbody');
+            tbody.innerHTML = '';
+            
+            // Find max volume and max range for highlighting
+            const maxVolume = Math.max(...sortedData.map(c => c.volume || 0));
+            const maxRange = Math.max(...sortedData.map(c => c.range || 0));
+            
+            sortedData.forEach((candle, index) => {
+                const row = document.createElement('tr');
+                const time = new Date(candle.date).toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: false 
+                });
+                const range = candle.range ? candle.range.toFixed(2) : '-';
+                
+                // Add candle direction highlighting
+                if (candle.close > candle.open) {
+                    row.classList.add('positive-candle');
+                } else if (candle.close < candle.open) {
+                    row.classList.add('negative-candle');
+                }
+                
+                // Create volume cell with conditional highlighting
+                let volumeCell = `<td>${candle.volume_formatted || candle.volume.toLocaleString()}</td>`;
+                if (candle.volume === maxVolume) {
+                    volumeCell = `<td class="max-volume">${candle.volume_formatted || candle.volume.toLocaleString()}</td>`;
+                }
+                
+                // Create range cell with conditional highlighting
+                let rangeCell = `<td>${range}</td>`;
+                if (candle.range === maxRange) {
+                    rangeCell = `<td class="max-range">${range}</td>`;
+                }
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${time}</td>
+                    <td>${candle.open}</td>
+                    <td class="positive">${candle.high}</td>
+                    <td class="negative">${candle.low}</td>
+                    <td>${candle.close}</td>
+                    ${volumeCell}
+                    ${rangeCell}
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Update data every second
+        setInterval(updateData, 1000);
+        
+        // Initial load - load both real-time and table data
+        updateRealtimeData();
+        updateTableData();
+    </script>
+</body>
+</html> 
