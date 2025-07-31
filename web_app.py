@@ -55,6 +55,18 @@ if kite is None:
     hvd = "2.43M"
     hr = 5.2
     candles_data = []
+else:
+    # Even if API is available, ensure we have fallback data
+    if cv == 0:
+        cv = 243000
+    if ltp == 0:
+        ltp = 60.3
+    if not candles_data:
+        # Generate initial dummy candle data
+        now = get_ist_time()
+        end_time = now - timedelta(minutes=1)
+        start_time = end_time - timedelta(minutes=candles)
+        past_candles(start_time, end_time)
 
 def get_last_trading_session_end():
     """Get the end time of the last trading session (3:30 PM IST)"""
@@ -383,14 +395,14 @@ def get_realtime_data():
     global cv, ltp, current_time
     
     # Ensure we have some data even if API fails
-    if cv == 0 and kite is None:
+    if cv == 0:
         cv = 243000
-    if ltp == 0 and kite is None:
+    if ltp == 0:
         ltp = 60.3
     
     # Always ensure current_time is set
     if not current_time:
-        current_time = datetime.now().strftime("%H:%M:%S")
+        current_time = get_ist_time().strftime("%H:%M:%S")
     
     return jsonify({
         'cv': cv,
@@ -407,9 +419,9 @@ def get_table_data():
     global candles_data, hvd, hr, hv
     
     # Ensure we have some data even if API fails
-    if not candles_data and kite is None:
+    if not candles_data:
         # Generate dummy candle data if none exists
-        now = datetime.now()
+        now = get_ist_time()
         end_time = now - timedelta(minutes=1)
         start_time = end_time - timedelta(minutes=candles)
         past_candles(start_time, end_time)
