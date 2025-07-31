@@ -6,6 +6,7 @@ import time
 import threading
 import os
 from quote import get_quote
+import pytz
 
 app = Flask(__name__)
 
@@ -57,27 +58,31 @@ if kite is None:
     candles_data = []
 
 def get_last_trading_session_end():
-    """Get the end time of the last trading session (3:30 PM)"""
-    now = datetime.now()
+    """Get the end time of the last trading session (3:30 PM IST)"""
+    # Get current time in IST
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(ist)
     
-    # If current time is before 9:15 AM, get yesterday's session
+    # If current time is before 9:15 AM IST, get yesterday's session
     if now.hour < 9 or (now.hour == 9 and now.minute < 15):
-        # Get yesterday's 3:30 PM
+        # Get yesterday's 3:30 PM IST
         yesterday = now - timedelta(days=1)
         return yesterday.replace(hour=15, minute=30, second=0, microsecond=0)
     else:
-        # Get today's 3:30 PM
+        # Get today's 3:30 PM IST
         return now.replace(hour=15, minute=30, second=0, microsecond=0)
 
 def is_market_open():
-    """Check if market is currently open (9:15 AM to 3:30 PM, Monday to Friday)"""
-    now = datetime.now()
+    """Check if market is currently open (9:15 AM to 3:30 PM IST, Monday to Friday)"""
+    # Get current time in IST
+    ist = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(ist)
     
     # Check if it's a weekday (Monday = 0, Sunday = 6)
     if now.weekday() >= 5:  # Saturday or Sunday
         return False
     
-    # Market hours: 9:15 AM to 3:30 PM
+    # Market hours: 9:15 AM to 3:30 PM IST
     market_start = now.replace(hour=9, minute=15, second=0, microsecond=0)
     market_end = now.replace(hour=15, minute=30, second=0, microsecond=0)
     
@@ -227,7 +232,9 @@ def update_data():
     global cv, ltp, current_time, volume_condition, minus_volume, is_market_hours
     while True:
         try:
-            now = datetime.now()
+            # Get current time in IST
+            ist = pytz.timezone('Asia/Kolkata')
+            now = datetime.now(ist)
             current_time = now.strftime("%H:%M:%S")
             
             # Check if market is open
@@ -301,11 +308,15 @@ def index():
 
 @app.route('/test')
 def test():
+    # Get current time in IST
+    ist = pytz.timezone('Asia/Kolkata')
+    ist_time = datetime.now(ist).strftime("%H:%M:%S")
+    
     return jsonify({
         'status': 'success',
         'message': 'App is working!',
         'kite_available': kite is not None,
-        'current_time': datetime.now().strftime("%H:%M:%S"),
+        'current_time': ist_time,
         'cv': cv,
         'ltp': ltp,
         'hvd': hvd,
