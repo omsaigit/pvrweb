@@ -380,17 +380,64 @@ def get_data():
 @app.route('/api/realtime_data')
 def get_realtime_data():
     """API endpoint for real-time data that updates every second"""
-    global cv, ltp, current_time
+    global cv, ltp, current_time, volume_condition, is_market_hours
     
-    # Ensure we have some data even if API fails
-    if cv == 0:
-        cv = 243000
-    if ltp == 0:
-        ltp = 60.3
-    
-    # Always ensure current_time is set
-    if not current_time:
+    try:
+        # Always fetch fresh data on each request
+        if kite is not None:
+            # Get current LTP
+            current_ltp = get_current_ltp()
+            if current_ltp > 0:
+                ltp = current_ltp
+            
+            # Get current quote for volume calculation
+            try:
+                q = get_quote(ts)
+                if ts in q:
+                    current_volume = q[ts]['volume']
+                    if 'minus_volume' in globals() and minus_volume > 0:
+                        cv = current_volume - minus_volume
+                    else:
+                        cv = current_volume
+            except Exception as e:
+                print(f"Error getting quote for CV: {e}")
+                # Keep existing CV if API fails
+                if cv == 0:
+                    cv = 243000
+        else:
+            # Dummy data mode - simulate some variation
+            import random
+            if cv == 0:
+                cv = 243000
+            if ltp == 0:
+                ltp = 60.3
+            
+            # Add small random variation to simulate real-time updates
+            cv += random.randint(-5000, 5000)
+            if cv < 0:
+                cv = 0
+            ltp += random.uniform(-0.5, 0.5)
+            if ltp < 0:
+                ltp = 0.1
+        
+        # Update current time
         current_time = get_ist_time().strftime("%H:%M:%S")
+        
+        # Update market hours status
+        is_market_hours = is_market_open()
+        
+        # Update volume condition
+        volume_condition = cv > 100000  # Simple threshold
+        
+    except Exception as e:
+        print(f"Error in realtime_data: {e}")
+        # Fallback to existing data
+        if cv == 0:
+            cv = 243000
+        if ltp == 0:
+            ltp = 60.3
+        if not current_time:
+            current_time = get_ist_time().strftime("%H:%M:%S")
     
     return jsonify({
         'cv': cv,
