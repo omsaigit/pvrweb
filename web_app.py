@@ -288,6 +288,15 @@ def update_data():
 def index():
     return render_template('index.html')
 
+@app.route('/test')
+def test():
+    return jsonify({
+        'status': 'success',
+        'message': 'App is working!',
+        'kite_available': kite is not None,
+        'current_time': datetime.now().strftime("%H:%M:%S")
+    })
+
 @app.route('/api/data')
 def get_data():
     return jsonify({
