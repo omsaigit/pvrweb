@@ -128,7 +128,7 @@ def format_volume(volume):
         return str(volume)
 
 def past_candles(start_time, end_time):
-    global candles_data, hvd, hr, hv
+    global candles_data, hvd, hr, hv, ltp
     try:
         if kite is None:
             print("KiteApp not initialized, generating dummy candle data")
@@ -167,7 +167,6 @@ def past_candles(start_time, end_time):
                 hr = round(hr_candle['range'], 2)
                 
                 # Set LTP from the last candle
-                global ltp
                 ltp = candles_data[-1]['close']
                 
                 print(f"Generated dummy candles - HVD: {hvd}, HR: {hr}, LTP: {ltp}")
@@ -203,7 +202,6 @@ def past_candles(start_time, end_time):
             hr = round(hr_candle['range'], 2)
             
             # Set LTP from the last candle
-            global ltp
             ltp = candles_data[-1]['close']
             
             print(f"Processed candles - HVD: {hvd}, HR: {hr}, LTP: {ltp}")
