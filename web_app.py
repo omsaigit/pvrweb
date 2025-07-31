@@ -94,14 +94,27 @@ def is_market_open():
 def get_instrument_token_from_ts(trading_symbol):
     """Get instrument token from trading symbol using get_quote"""
     try:
+        print(f"Fetching instrument token for: {trading_symbol}")
         quote_data = get_quote(trading_symbol)
-        if quote_data and trading_symbol in quote_data:
-            return quote_data[trading_symbol]['instrument_token']
+        
+        if quote_data is None:
+            print(f"Quote API returned None for {trading_symbol}")
+            return None
+            
+        print(f"Quote data received: {quote_data}")
+        
+        if trading_symbol in quote_data:
+            instrument_token = quote_data[trading_symbol]['instrument_token']
+            print(f"Found instrument token: {instrument_token} for {trading_symbol}")
+            return instrument_token
         else:
-            print(f"Could not find instrument token for {trading_symbol}")
+            print(f"Trading symbol {trading_symbol} not found in quote data")
+            print(f"Available symbols: {list(quote_data.keys()) if quote_data else 'None'}")
             return None
     except Exception as e:
         print(f"Error getting instrument token for {trading_symbol}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_initial_quote():
@@ -476,22 +489,31 @@ def update_config():
     
     try:
         data = request.get_json()
+        print(f"Received update config request: {data}")
         
         # Validate input
         if not all(key in data for key in ['candles', 'ts']):
-            return jsonify({'success': False, 'error': 'Missing required parameters'})
+            return jsonify({'success': False, 'error': 'Missing required parameters: candles and ts'})
         
         new_candles = int(data['candles'])
-        new_ts = str(data['ts'])
+        new_ts = str(data['ts']).strip()
         
         # Validate ranges
         if new_candles < 1 or new_candles > 100:
             return jsonify({'success': False, 'error': 'Candles must be between 1 and 100'})
         
+        if not new_ts:
+            return jsonify({'success': False, 'error': 'Trading symbol cannot be empty'})
+        
+        print(f"Validating trading symbol: {new_ts}")
+        
         # Get instrument token automatically from trading symbol
         new_instrument_token = get_instrument_token_from_ts(new_ts)
         if new_instrument_token is None:
-            return jsonify({'success': False, 'error': f'Could not get instrument token for {new_ts}'})
+            return jsonify({
+                'success': False, 
+                'error': f'Could not get instrument token for "{new_ts}". Please check if the trading symbol is correct and try again.'
+            })
         
         # Update configuration
         candles = new_candles
@@ -525,20 +547,32 @@ def update_config():
             'message': f'Configuration updated successfully. Instrument token: {instrument_token}'
         })
         
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Invalid input format: {str(e)}'})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"Unexpected error in update_config: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Unexpected error: {str(e)}'})
 
 @app.route('/api/get_instrument_token/<trading_symbol>')
 def get_instrument_token_api(trading_symbol):
     """API endpoint to get instrument token for a trading symbol"""
     try:
+        print(f"API request for instrument token: {trading_symbol}")
         token = get_instrument_token_from_ts(trading_symbol)
         if token:
             return jsonify({'success': True, 'instrument_token': token})
         else:
-            return jsonify({'success': False, 'error': f'Could not get instrument token for {trading_symbol}'})
+            return jsonify({
+                'success': False, 
+                'error': f'Could not get instrument token for "{trading_symbol}". Please verify the trading symbol is correct.'
+            })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"Error in get_instrument_token_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'})
 
 @app.route('/api/refresh_candles')
 def refresh_candles():
@@ -570,6 +604,78 @@ def refresh_candles():
             'hr': hr,
             'is_market_hours': is_market_hours,
             'time_range': f"{start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}"
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/indices_data')
+def get_indices_data():
+    """API endpoint to get current index values (Sensex, Bank Nifty, Nifty50)"""
+    try:
+        # Load config to get instrument tokens
+        with open('config.json') as f:
+            config = json.load(f)
+        
+        indices_data = {}
+        
+        # Fetch Sensex data
+        try:
+            sensex_quote = get_quote("BSE:SENSEX")
+            if sensex_quote and 'BSE:SENSEX' in sensex_quote:
+                indices_data['sensex'] = {
+                    'ltp': sensex_quote['BSE:SENSEX'].get('last_price', 0),
+                    'change': sensex_quote['BSE:SENSEX'].get('net_change', 0),
+                    'change_percent': (sensex_quote['BSE:SENSEX'].get('net_change', 0) / sensex_quote['BSE:SENSEX'].get('ohlc', {}).get('close', 1)) * 100 if sensex_quote['BSE:SENSEX'].get('ohlc', {}).get('close', 0) > 0 else 0
+                }
+            else:
+                # Try alternative symbol for Sensex
+                sensex_quote = get_quote("NSE:SENSEX")
+                if sensex_quote and 'NSE:SENSEX' in sensex_quote:
+                    indices_data['sensex'] = {
+                        'ltp': sensex_quote['NSE:SENSEX'].get('last_price', 0),
+                        'change': sensex_quote['NSE:SENSEX'].get('net_change', 0),
+                        'change_percent': (sensex_quote['NSE:SENSEX'].get('net_change', 0) / sensex_quote['NSE:SENSEX'].get('ohlc', {}).get('close', 1)) * 100 if sensex_quote['NSE:SENSEX'].get('ohlc', {}).get('close', 0) > 0 else 0
+                    }
+                else:
+                    indices_data['sensex'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        except Exception as e:
+            print(f"Error fetching Sensex data: {e}")
+            indices_data['sensex'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        
+        # Fetch Bank Nifty data
+        try:
+            banknifty_quote = get_quote("NSE:NIFTY BANK")
+            if banknifty_quote and 'NSE:NIFTY BANK' in banknifty_quote:
+                indices_data['banknifty'] = {
+                    'ltp': banknifty_quote['NSE:NIFTY BANK'].get('last_price', 0),
+                    'change': banknifty_quote['NSE:NIFTY BANK'].get('net_change', 0),
+                    'change_percent': (banknifty_quote['NSE:NIFTY BANK'].get('net_change', 0) / banknifty_quote['NSE:NIFTY BANK'].get('ohlc', {}).get('close', 1)) * 100 if banknifty_quote['NSE:NIFTY BANK'].get('ohlc', {}).get('close', 0) > 0 else 0
+                }
+            else:
+                indices_data['banknifty'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        except Exception as e:
+            print(f"Error fetching Bank Nifty data: {e}")
+            indices_data['banknifty'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        
+        # Fetch Nifty50 data
+        try:
+            nifty50_quote = get_quote("NSE:NIFTY 50")
+            if nifty50_quote and 'NSE:NIFTY 50' in nifty50_quote:
+                indices_data['nifty50'] = {
+                    'ltp': nifty50_quote['NSE:NIFTY 50'].get('last_price', 0),
+                    'change': nifty50_quote['NSE:NIFTY 50'].get('net_change', 0),
+                    'change_percent': (nifty50_quote['NSE:NIFTY 50'].get('net_change', 0) / nifty50_quote['NSE:NIFTY 50'].get('ohlc', {}).get('close', 1)) * 100 if nifty50_quote['NSE:NIFTY 50'].get('ohlc', {}).get('close', 0) > 0 else 0
+                }
+            else:
+                indices_data['nifty50'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        except Exception as e:
+            print(f"Error fetching Nifty50 data: {e}")
+            indices_data['nifty50'] = {'ltp': 0, 'change': 0, 'change_percent': 0}
+        
+        return jsonify({
+            'success': True,
+            'indices': indices_data
         })
         
     except Exception as e:

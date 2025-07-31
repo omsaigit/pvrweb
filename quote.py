@@ -14,12 +14,28 @@ headers = {
 
 def get_quote(instrument):
     """Get quote data for a given instrument symbol, e.g. 'NSE:INFY'"""
-    url = f'https://api.kite.trade/quote?i={instrument}'
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()['data']
-    else:
-        print('Error:', response.status_code, response.text)
+    try:
+        url = f'https://api.kite.trade/quote?i={instrument}'
+        print(f"Making API request to: {url}")
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        print(f"Response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"Response data keys: {list(data.keys()) if data else 'None'}")
+            return data.get('data')
+        else:
+            print(f'API Error: {response.status_code}, Response: {response.text}')
+            return None
+    except requests.exceptions.Timeout:
+        print(f"Timeout error while fetching quote for {instrument}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Request error while fetching quote for {instrument}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error while fetching quote for {instrument}: {e}")
         return None
 
 # Example usage:
