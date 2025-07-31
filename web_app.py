@@ -9,6 +9,12 @@ from quote import get_quote
 
 app = Flask(__name__)
 
+def get_ist_time():
+    """Get current time in IST (UTC + 5:30)"""
+    utc_now = datetime.utcnow()
+    ist_time = utc_now + timedelta(hours=5, minutes=30)
+    return ist_time
+
 # Global variables to store data
 candles_data = []
 hvd = "0"
@@ -81,12 +87,6 @@ def get_last_trading_session_end():
     else:
         # Get today's 3:30 PM IST
         return now.replace(hour=15, minute=30, second=0, microsecond=0)
-
-def get_ist_time():
-    """Get current time in IST (UTC + 5:30)"""
-    utc_now = datetime.utcnow()
-    ist_time = utc_now + timedelta(hours=5, minutes=30)
-    return ist_time
 
 def is_market_open():
     """Check if market is currently open (9:15 AM to 3:30 PM IST, Monday to Friday)"""
