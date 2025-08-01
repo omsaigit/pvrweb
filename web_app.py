@@ -28,8 +28,8 @@ is_market_hours = False
 
 # Configuration variables (now configurable)
 candles = 25
-instrument_token = 14283010
-ts = 'NFO:NIFTY25JUL24800CE'
+instrument_token = 17114370
+ts = 'NFO:BANKNIFTY25AUG56000CE'
 
 # Load configuration with environment variable fallback
 try:
