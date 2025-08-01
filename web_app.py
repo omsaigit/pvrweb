@@ -273,9 +273,12 @@ def update_data():
                 # Update real-time data every second
                 try:
                     if kite is None:
-                        # Use dummy data for demo
-                        cv = 243000 + (now.second * 1000)  # Simulate changing volume
-                        ltp = 60.3 + (now.second % 10) * 0.1  # Simulate changing price
+                        # Use dummy data for demo with more realistic variations
+                        import random
+                        base_cv = 243000
+                        base_ltp = 60.3
+                        cv = base_cv + random.randint(-5000, 5000) + (now.second * 100)
+                        ltp = base_ltp + random.uniform(-0.5, 0.5) + (now.second % 10) * 0.05
                         volume_condition = cv >= hv
                     else:
                         q = get_quote(ts)
@@ -418,18 +421,28 @@ def get_realtime_data():
                 if cv == 0:
                     cv = 243000
         else:
-            # Dummy data mode - simulate some variation
+            # Dummy data mode - simulate realistic real-time variations
             import random
+            import time as time_module
+            
             if cv == 0:
                 cv = 243000
             if ltp == 0:
                 ltp = 60.3
             
+            # Use current timestamp for more realistic variations
+            current_timestamp = int(time_module.time())
+            
             # Add small random variation to simulate real-time updates
-            cv += random.randint(-5000, 5000)
+            # Use timestamp to ensure consistent but changing values
+            random.seed(current_timestamp)
+            cv_variation = random.randint(-3000, 3000)
+            ltp_variation = random.uniform(-0.3, 0.3)
+            
+            cv += cv_variation
             if cv < 0:
                 cv = 0
-            ltp += random.uniform(-0.5, 0.5)
+            ltp += ltp_variation
             if ltp < 0:
                 ltp = 0.1
         
@@ -439,8 +452,8 @@ def get_realtime_data():
         # Update market hours status
         is_market_hours = is_market_open()
         
-        # Update volume condition
-        volume_condition = cv > 100000  # Simple threshold
+        # Update volume condition based on actual HV value
+        volume_condition = cv >= hv if hv > 0 else cv > 100000
         
     except Exception as e:
         print(f"Error in realtime_data: {e}")
@@ -458,7 +471,8 @@ def get_realtime_data():
         'ltp': ltp,
         'current_time': current_time,
         'volume_condition': volume_condition,
-        'is_market_hours': is_market_hours
+        'is_market_hours': is_market_hours,
+        'timestamp': int(time.time())  # Add timestamp for debugging
     })
 
 @app.route('/api/table_data')

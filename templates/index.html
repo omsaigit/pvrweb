@@ -375,6 +375,25 @@
         .updating {
             animation: subtle-pulse 0.5s ease;
         }
+        
+        /* Real-time update indicator */
+        .realtime-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #27ae60;
+            animation: realtime-pulse 1s infinite;
+            z-index: 1000;
+        }
+        
+        @keyframes realtime-pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
         .last-updated {
             text-align: center;
@@ -593,6 +612,7 @@
         </div>
 
         <div class="market-status" id="market-status"></div>
+        <div class="realtime-indicator" id="realtime-indicator" title="Real-time updates active"></div>
 
         <button class="config-toggle" id="config-toggle" title="Configuration Settings">⚙️</button>
         
@@ -789,9 +809,22 @@
             fetch('/api/realtime_data')
                 .then(response => response.json())
                 .then(data => {
+                    // Add updating animation
+                    const cvValue = document.getElementById('cv-value');
+                    const ltpValue = document.getElementById('ltp-value');
+                    
+                    cvValue.classList.add('updating');
+                    ltpValue.classList.add('updating');
+                    
                     // Update status cards (real-time data)
-                    document.getElementById('cv-value').textContent = data.cv_formatted;
-                    document.getElementById('ltp-value').textContent = data.ltp.toFixed(2);
+                    cvValue.textContent = data.cv_formatted;
+                    ltpValue.textContent = data.ltp.toFixed(2);
+                    
+                    // Remove updating animation after a short delay
+                    setTimeout(() => {
+                        cvValue.classList.remove('updating');
+                        ltpValue.classList.remove('updating');
+                    }, 300);
                     
                     // Update volume condition styling
                     const cvCard = document.getElementById('cv-card');
@@ -803,18 +836,34 @@
                     
                     // Update market status
                     const marketStatus = document.getElementById('market-status');
+                    const realtimeIndicator = document.getElementById('realtime-indicator');
                     
                     if (data.is_market_hours) {
                         marketStatus.className = 'market-status market-open';
+                        realtimeIndicator.style.display = 'block';
                     } else {
                         marketStatus.className = 'market-status market-closed';
+                        realtimeIndicator.style.display = 'none';
                     }
                     
-                    // Update last updated time
-                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                    // Update last updated time with more precise formatting
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString('en-US', { 
+                        hour12: false, 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        second: '2-digit' 
+                    });
+                    document.getElementById('last-updated').textContent = timeString;
+                    
+                    // Log for debugging (remove in production)
+                    console.log(`Real-time update: CV=${data.cv_formatted}, LTP=${data.ltp.toFixed(2)}, Time=${timeString}`);
+                })
+                .then(() => {
+                    handleApiSuccess();
                 })
                 .catch(error => {
-                    console.error('Error fetching real-time data:', error);
+                    handleApiError(error, 'real-time data');
                 });
         }
 
@@ -874,8 +923,11 @@
                         }
                     }
                 })
+                .then(() => {
+                    handleApiSuccess();
+                })
                 .catch(error => {
-                    console.error('Error fetching indices data:', error);
+                    handleApiError(error, 'indices data');
                     // Keep the existing values if there's an error
                 });
         }
@@ -895,8 +947,11 @@
                     currentCandlesData = data.candles_data || [];
                     renderTable();
                 })
+                .then(() => {
+                    handleApiSuccess();
+                })
                 .catch(error => {
-                    console.error('Error fetching table data:', error);
+                    handleApiError(error, 'table data');
                 });
         }
 
@@ -911,6 +966,40 @@
             // Always update real-time data and indices data
             updateRealtimeData();
             updateIndicesData();
+        }
+
+        // Function to ensure precise timing for real-time updates
+        function startRealTimeUpdates() {
+            // Initial update
+            updateData();
+            
+            // Set up precise interval for real-time updates
+            setInterval(() => {
+                updateData();
+            }, 1000);
+            
+            console.log('Real-time updates started - updating every second');
+        }
+
+        // Error handling for API calls
+        let consecutiveErrors = 0;
+        const maxConsecutiveErrors = 5;
+
+        function handleApiError(error, endpoint) {
+            consecutiveErrors++;
+            console.error(`Error in ${endpoint}:`, error);
+            
+            if (consecutiveErrors >= maxConsecutiveErrors) {
+                console.warn('Too many consecutive errors, pausing updates for 10 seconds');
+                setTimeout(() => {
+                    consecutiveErrors = 0;
+                    console.log('Resuming updates after error pause');
+                }, 10000);
+            }
+        }
+
+        function handleApiSuccess() {
+            consecutiveErrors = 0;
         }
 
         // Table header click listeners
@@ -1034,11 +1123,10 @@
             });
         }
 
-        // Update data every 10 seconds
-        setInterval(updateData, 10000);
+        // Start real-time updates with precise timing
+        startRealTimeUpdates();
         
-        // Initial load - load real-time, table, and indices data
-        updateRealtimeData();
+        // Initial load - load table and indices data
         updateTableData();
         updateIndicesData();
     </script>
