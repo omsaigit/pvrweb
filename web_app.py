@@ -28,8 +28,8 @@ is_market_hours = False
 
 # Configuration variables (now configurable)
 candles = 25
-instrument_token = 14283010
-ts = 'NFO:NIFTY25JUL24800CE'
+instrument_token = 17114370
+ts = 'NFO:BANKNIFTY25AUG56000CE'
 
 # Load configuration with environment variable fallback
 try:
@@ -246,7 +246,9 @@ def update_data():
                 # Market is open - update real-time data
                 if now.second == 0:
                     # Update candles data every minute
-                    end_time = now - timedelta(minutes=1)
+                    # Note: Zerodha API typically has 1-2 minute delay for historical data
+                    # We're requesting current time to minimize lag
+                    end_time = now - timedelta(minutes=0)  # Request current time data
                     start_time = end_time - timedelta(minutes=candles)
                     past_candles(start_time, end_time)
                     
@@ -256,6 +258,13 @@ def update_data():
                         minus_volume = q[ts]['volume']
                     except Exception as e:
                         print(f"Error updating minus_volume: {e}")
+                
+                # Also update candles data every 30 seconds to reduce lag further
+                elif now.second == 30:
+                    # Quick update to get more recent data
+                    end_time = now - timedelta(minutes=0)
+                    start_time = end_time - timedelta(minutes=candles)
+                    past_candles(start_time, end_time)
                 
                 # Update real-time data every second
                 try:
@@ -336,7 +345,7 @@ def init_data():
         if is_market_hours:
             get_initial_quote()
             curr_time = datetime.now()
-            end_time = curr_time - timedelta(minutes=1)
+            end_time = curr_time - timedelta(minutes=0)  # Remove 1-minute delay
             start_time = end_time - timedelta(minutes=candles)
             past_candles(start_time, end_time)
         else:
@@ -380,64 +389,17 @@ def get_data():
 @app.route('/api/realtime_data')
 def get_realtime_data():
     """API endpoint for real-time data that updates every second"""
-    global cv, ltp, current_time, volume_condition, is_market_hours
+    global cv, ltp, current_time
     
-    try:
-        # Always fetch fresh data on each request
-        if kite is not None:
-            # Get current LTP
-            current_ltp = get_current_ltp()
-            if current_ltp > 0:
-                ltp = current_ltp
-            
-            # Get current quote for volume calculation
-            try:
-                q = get_quote(ts)
-                if ts in q:
-                    current_volume = q[ts]['volume']
-                    if 'minus_volume' in globals() and minus_volume > 0:
-                        cv = current_volume - minus_volume
-                    else:
-                        cv = current_volume
-            except Exception as e:
-                print(f"Error getting quote for CV: {e}")
-                # Keep existing CV if API fails
-                if cv == 0:
-                    cv = 243000
-        else:
-            # Dummy data mode - simulate some variation
-            import random
-            if cv == 0:
-                cv = 243000
-            if ltp == 0:
-                ltp = 60.3
-            
-            # Add small random variation to simulate real-time updates
-            cv += random.randint(-5000, 5000)
-            if cv < 0:
-                cv = 0
-            ltp += random.uniform(-0.5, 0.5)
-            if ltp < 0:
-                ltp = 0.1
-        
-        # Update current time
+    # Ensure we have some data even if API fails
+    if cv == 0:
+        cv = 243000
+    if ltp == 0:
+        ltp = 60.3
+    
+    # Always ensure current_time is set
+    if not current_time:
         current_time = get_ist_time().strftime("%H:%M:%S")
-        
-        # Update market hours status
-        is_market_hours = is_market_open()
-        
-        # Update volume condition
-        volume_condition = cv > 100000  # Simple threshold
-        
-    except Exception as e:
-        print(f"Error in realtime_data: {e}")
-        # Fallback to existing data
-        if cv == 0:
-            cv = 243000
-        if ltp == 0:
-            ltp = 60.3
-        if not current_time:
-            current_time = get_ist_time().strftime("%H:%M:%S")
     
     return jsonify({
         'cv': cv,
@@ -507,7 +469,7 @@ def update_config():
             # Market is open - initialize with current time data
             get_initial_quote()
             curr_time = datetime.now()
-            end_time = curr_time - timedelta(minutes=1)
+            end_time = curr_time - timedelta(minutes=0)  # Remove 1-minute delay
             start_time = end_time - timedelta(minutes=candles)
             print(f"Reinitializing with live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
         else:
@@ -551,7 +513,7 @@ def refresh_candles():
         if is_market_hours:
             # Market is open - get current time data
             curr_time = datetime.now()
-            end_time = curr_time - timedelta(minutes=1)
+            end_time = curr_time - timedelta(minutes=0)  # Remove 1-minute delay
             start_time = end_time - timedelta(minutes=candles)
             print(f"Manual refresh - Live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
         else:
@@ -589,6 +551,44 @@ def get_ltp_api():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/force_refresh')
+def force_refresh():
+    """API endpoint to force refresh data with minimal delay"""
+    global candles_data, hvd, hr, hv
+    
+    try:
+        is_market_hours = is_market_open()
+        
+        if is_market_hours:
+            # Force refresh with current time (no delay)
+            curr_time = get_ist_time()
+            end_time = curr_time - timedelta(minutes=0)  # No delay
+            start_time = end_time - timedelta(minutes=candles)
+            print(f"Force refresh - Current time: {curr_time.strftime('%H:%M:%S')}")
+            print(f"Requesting data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
+        else:
+            # Market is closed - get last 25 minutes of previous session
+            session_end = get_last_trading_session_end()
+            start_time = session_end - timedelta(minutes=candles)
+            end_time = session_end
+            print(f"Force refresh - Historical data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
+        
+        past_candles(start_time, end_time)
+        
+        return jsonify({
+            'success': True,
+            'candles_count': len(candles_data) if candles_data else 0,
+            'hvd': hvd,
+            'hr': hr,
+            'is_market_hours': is_market_hours,
+            'time_range': f"{start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}",
+            'current_time': get_ist_time().strftime('%H:%M:%S'),
+            'message': 'Data refreshed with minimal delay'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Initialize data based on market hours
     is_market_hours = is_market_open()
@@ -597,7 +597,7 @@ if __name__ == '__main__':
         # Market is open - initialize with current time data
         get_initial_quote()
         curr_time = datetime.now()
-        end_time = curr_time - timedelta(minutes=1)
+        end_time = curr_time - timedelta(minutes=0)  # Remove 1-minute delay
         start_time = end_time - timedelta(minutes=candles)
         print(f"Initializing with live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
     else:
@@ -629,7 +629,7 @@ else:
         # Market is open - initialize with current time data
         get_initial_quote()
         curr_time = get_ist_time()
-        end_time = curr_time - timedelta(minutes=1)
+        end_time = curr_time - timedelta(minutes=0)  # Remove 1-minute delay
         start_time = end_time - timedelta(minutes=candles)
         print(f"Production: Initializing with live data: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')}")
     else:

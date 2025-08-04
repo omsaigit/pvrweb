@@ -70,6 +70,59 @@
             box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
 
+        .force-refresh-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 25px;
+            padding: 8px 16px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .force-refresh-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .force-refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        .lag-indicator {
+            position: fixed;
+            top: 70px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 0.8rem;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .lag-indicator.low-lag {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .lag-indicator.medium-lag {
+            background: rgba(255, 152, 0, 0.3);
+            border-color: rgba(255, 152, 0, 0.5);
+        }
+
+        .lag-indicator.high-lag {
+            background: rgba(244, 67, 54, 0.3);
+            border-color: rgba(244, 67, 54, 0.5);
+        }
+
         .config-section {
             position: fixed;
             top: 80px;
@@ -417,6 +470,8 @@
 </head>
 <body>
     <div class="container">
+        <button class="force-refresh-btn" onclick="forceRefresh()">🔄 Force Refresh</button>
+        <div class="lag-indicator" id="lag-indicator">⏱️ Lag: Calculating...</div>
         <div class="header">
             <h2>📈 PVR </h2>
             <p>Real-time market data monitoring</p>
@@ -520,7 +575,8 @@
 
         // Table data state
         let currentCandlesData = [];
-        let currentSort = { column: 'time', direction: 'asc' };
+        // Default sorting: Time column in descending order (newest first)
+        let currentSort = { column: 'time', direction: 'desc' };
 
         // Configuration panel toggle
         document.getElementById('config-toggle').addEventListener('click', function() {
@@ -653,9 +709,75 @@
                     // Update candles table
                     currentCandlesData = data.candles_data || [];
                     renderTable();
+                    
+                    // Calculate and display lag
+                    updateLagIndicator(data.candles_data);
                 })
                 .catch(error => {
                     console.error('Error fetching table data:', error);
+                });
+        }
+
+        function updateLagIndicator(candlesData) {
+            if (!candlesData || candlesData.length === 0) return;
+            
+            try {
+                const latestCandle = candlesData[candlesData.length - 1];
+                const candleDate = new Date(latestCandle.date);
+                const currentTime = new Date();
+                const timeDiff = (currentTime - candleDate) / 1000 / 60; // Convert to minutes
+                
+                const lagIndicator = document.getElementById('lag-indicator');
+                let lagClass = 'high-lag';
+                let lagText = `⏱️ Lag: ${timeDiff.toFixed(1)}m`;
+                
+                if (timeDiff < 1) {
+                    lagClass = 'low-lag';
+                    lagText = `✅ Lag: ${timeDiff.toFixed(1)}m`;
+                } else if (timeDiff < 2) {
+                    lagClass = 'medium-lag';
+                    lagText = `⚠️ Lag: ${timeDiff.toFixed(1)}m`;
+                } else {
+                    lagText = `❌ Lag: ${timeDiff.toFixed(1)}m`;
+                }
+                
+                lagIndicator.textContent = lagText;
+                lagIndicator.className = `lag-indicator ${lagClass}`;
+                
+            } catch (error) {
+                console.error('Error calculating lag:', error);
+            }
+        }
+
+        function forceRefresh() {
+            const btn = document.querySelector('.force-refresh-btn');
+            btn.textContent = '🔄 Refreshing...';
+            btn.disabled = true;
+            
+            fetch('/api/force_refresh')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Force refresh successful:', data.message);
+                        console.log('Time range:', data.time_range);
+                        console.log('Current time:', data.current_time);
+                        
+                        // Update the table data immediately
+                        updateTableData();
+                        
+                        // Show success message
+                        alert(`Data refreshed successfully!\nTime range: ${data.time_range}\nCurrent time: ${data.current_time}`);
+                    } else {
+                        alert('Error refreshing data: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error during force refresh:', error);
+                    alert('Error refreshing data');
+                })
+                .finally(() => {
+                    btn.textContent = '🔄 Force Refresh';
+                    btn.disabled = false;
                 });
         }
 
@@ -792,12 +914,32 @@
             });
         }
 
-        // Update data every 10 seconds
-        setInterval(updateData, 10000);
+        // Set initial sort indicator
+        function setInitialSort() {
+            // Clear all sort indicators
+            document.querySelectorAll('.table-header').forEach(header => {
+                header.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Set the time column to descending sort indicator
+            const timeHeader = document.querySelector('[data-sort="time"]');
+            if (timeHeader) {
+                timeHeader.classList.add('sort-desc');
+            }
+        }
+
+        // Update data every second
+        setInterval(updateData, 1000);
+        
+        // Also update table data every 30 seconds to reduce lag
+        setInterval(updateTableData, 30000);
         
         // Initial load - load both real-time and table data
         updateRealtimeData();
         updateTableData();
+        
+        // Set initial sort indicator after DOM is loaded
+        setInitialSort();
     </script>
 </body>
 </html> 
