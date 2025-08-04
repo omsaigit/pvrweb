@@ -4,7 +4,7 @@ import os
 
 api_key = "gs3dacf2honsskjw"
 api_secret = "xgkm43b7fcquzrd1njsjky2t7qb1rax3"
-request_token = "a6kgkpvBBfNpOoVl9wUROHxl3xcsXeAi"
+request_token = "ePJtDYD5BdU11nhrx6FOQ0H3auoJnxGA"
 with open('config.json', 'r') as file:
     config_data = json.load(file)
 kite = KiteConnect(api_key=api_key)
